@@ -2,16 +2,18 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>ACL Compiler Web Studio</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ACL Compiler Web Studio (Pure JS Engine)</title>
+    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.38.0/min/vs/editor/ui/monaco-editor.min.css">
-    <script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.38.0/min/vs/loader.min.js"></script>
+    
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: monospace; background: #121212; color: #fff; height: 100vh; display: flex; flex-direction: column; }
         header { background: #1e1e1e; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; }
         .logo { font-size: 1.2rem; font-weight: bold; color: #00ff66; }
         button { background: #238636; color: white; border: none; padding: 8px 20px; font-weight: bold; border-radius: 6px; cursor: pointer; }
-        button:disabled { background: #555; cursor: not-allowed; }
         .main { display: flex; flex: 1; height: calc(100vh - 60px); }
         #editor { width: 60%; height: 100%; border-right: 2px solid #222; }
         .terminal { width: 40%; background: #080808; display: flex; flex-direction: column; }
@@ -22,106 +24,29 @@
 <body>
 
     <header>
-        <div class="logo">⚡ ACL Web Studio</div>
-        <button id="run-btn" onclick="runACL()" disabled>Loading Compiler Engine...</button>
+        <div class="logo">⚡ ACL Web Studio (Pure JS Interpreter)</div>
+        <button id="run-btn" onclick="runACL()">Run Code (Ctrl + Enter)</button>
     </header>
 
     <div class="main">
         <div id="editor"></div>
         <div class="terminal">
             <div class="term-header">ACL Terminal Output</div>
-            <div id="output">Initializing WebAssembly Engine...</div>
+            <div id="output">Engine Ready!</div>
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.38.0/min/vs/loader.min.js"></script>
     <script>
         let editor;
-        let pyodide;
 
-        async function initEngine() {
-            try {
-                pyodide = await loadPyodide();
-                
-                // Fetch compiler.py and ALL highlevel modules
-                const compilerCode = await fetch('./compiler.py').then(r => r.text());
-                const tokensCode = await fetch('./highlevel/tokens.py').then(r => r.text());
-                const astNodesCode = await fetch('./highlevel/ast_nodes.py').then(r => r.text());
-                const lexerCode = await fetch('./highlevel/lexer.py').then(r => r.text());
-                const parserCode = await fetch('./highlevel/parser.py').then(r => r.text());
-                const semanticCode = await fetch('./highlevel/semantic.py').then(r => r.text());
-                const codegenCode = await fetch('./highlevel/codegen.py').then(r => r.text());
-
-                // Mount complete module tree into Pyodide VFS
-                await pyodide.runPythonAsync(`
-import os
-import sys
-
-# Add highlevel folder to Python Search Path so internal imports like "from tokens import ..." work smoothly
-os.makedirs('highlevel', exist_ok=True)
-if os.path.abspath('highlevel') not in sys.path:
-    sys.path.append(os.path.abspath('highlevel'))
-
-with open('compiler.py', 'w') as f:
-    f.write('''${compilerCode.replace(/\\/g, '\\\\').replace(/'''/g, "\\'\\'\\'") }''')
-
-with open('highlevel/tokens.py', 'w') as f:
-    f.write('''${tokensCode.replace(/\\/g, '\\\\').replace(/'''/g, "\\'\\'\\'") }''')
-
-with open('highlevel/ast_nodes.py', 'w') as f:
-    f.write('''${astNodesCode.replace(/\\/g, '\\\\').replace(/'''/g, "\\'\\'\\'") }''')
-
-with open('highlevel/lexer.py', 'w') as f:
-    f.write('''${lexerCode.replace(/\\/g, '\\\\').replace(/'''/g, "\\'\\'\\'") }''')
-
-with open('highlevel/parser.py', 'w') as f:
-    f.write('''${parserCode.replace(/\\/g, '\\\\').replace(/'''/g, "\\'\\'\\'") }''')
-
-with open('highlevel/semantic.py', 'w') as f:
-    f.write('''${semanticCode.replace(/\\/g, '\\\\').replace(/'''/g, "\\'\\'\\'") }''')
-
-with open('highlevel/codegen.py', 'w') as f:
-    f.write('''${codegenCode.replace(/\\/g, '\\\\').replace(/'''/g, "\\'\\'\\'") }''')
-
-from highlevel.lexer import HighLexer
-from highlevel.parser import HighParser
-from highlevel.semantic import HighSemanticAnalyzer
-
-def run_browser_code(code):
-    try:
-        lexer = HighLexer(code, filename="test.acl")
-        tokens = lexer.tokenize()
-        parser = HighParser(tokens, filename="test.acl")
-        ast = parser.parse()
-        
-        analyzer = HighSemanticAnalyzer(filename="test.acl")
-        if not analyzer.analyze(ast):
-            return "\\n".join(analyzer.errors)
-            
-        return "SUCCESS: High-Level Code Parsed & Verified Successfully! (AST Ready)"
-    except Exception as e:
-        return f"Syntax/Compiler Error: {str(e)}"
-                `);
-
-                document.getElementById('output').innerText = "ACL High-Level Engine Loaded & Ready!";
-                const btn = document.getElementById('run-btn');
-                btn.innerText = "Run Code (Ctrl + Enter)";
-                btn.disabled = false;
-            } catch (err) {
-                document.getElementById('output').innerText = "Engine Load Error: " + err.message;
-            }
-        }
-
-        initEngine();
-
-        // Monaco Editor Config
+        // Monaco Editor Setup
         require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.38.0/min/vs' }});
         require(['vs/editor/editor.main'], function() {
             monaco.languages.register({ id: 'acl' });
             monaco.languages.setMonarchTokensProvider('acl', {
                 tokenizer: {
                     root: [
-                        [/set|say|check|loop_if|block|call|ret|try|catch|raise/, "keyword"],
+                        [/set|say/, "keyword"],
                         [/\".*?\"/, "string"],
                         [/#.*/, "comment"],
                         [/[0-9]+/, "number"]
@@ -130,7 +55,7 @@ def run_browser_code(code):
             });
 
             editor = monaco.editor.create(document.getElementById('editor'), {
-                value: `@mode: high\n\nset name = "aryan"\nsay "Hello " + name\n\nset a = 10\nset b = 20\nset sum = a + b\nsay sum`,
+                value: `@high\n\nsay "hi"\n\nset name = "aryan"\nsay name + " is great"\n\nset a = 5\nset b = 10\nsay a + b\nsay a * b\nsay b / a`,
                 language: 'acl',
                 theme: 'vs-dark',
                 fontSize: 15,
@@ -140,18 +65,69 @@ def run_browser_code(code):
             editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, runACL);
         });
 
-        async function runACL() {
+        // Safe Expression Evaluator using JS Scope
+        function evaluateExpression(expr, env) {
+            try {
+                // Replace variables in expression with their values in scope
+                const keys = Object.keys(env);
+                const values = Object.values(env);
+                
+                // Construct safe function scope
+                const func = new Function(...keys, `return (${expr});`);
+                return func(...values);
+            } catch (err) {
+                throw new Error(`Expression evaluation error: ${expr}`);
+            }
+        }
+
+        // Pure JS ACL Interpreter Engine
+        function runACL() {
+            if (!editor) return;
             const code = editor.getValue();
             const outDiv = document.getElementById('output');
-            outDiv.innerText = "Compiling with ACL High-Level Engine...";
+            outDiv.innerText = "";
 
-            try {
-                pyodide.globals.set("user_code", code);
-                const result = await pyodide.runPythonAsync(`run_browser_code(user_code)`);
-                outDiv.innerText = result;
-            } catch (err) {
-                outDiv.innerText = "Execution Error: " + err.message;
+            const lines = code.split('\n');
+            const env = {};
+            const output = [];
+
+            for (let i = 0; i < lines.length; i++) {
+                let line = lines[i].trim();
+
+                // Ignore empty lines, comments and directives
+                if (!line || line.startsWith('#') || line.startsWith('@')) {
+                    continue;
+                }
+
+                try {
+                    // 1. SET Statement (e.g., set name = "aryan" or set a = 5 + 10)
+                    if (line.startsWith('set ')) {
+                        const statement = line.substring(4).trim();
+                        const parts = statement.split('=');
+
+                        if (parts.length >= 2) {
+                            const varName = parts[0].trim();
+                            const expr = parts.slice(1).join('=').trim();
+                            
+                            // Evaluate and store in environment
+                            env[varName] = evaluateExpression(expr, env);
+                        } else {
+                            throw new Error(`Line ${i + 1}: Invalid set syntax`);
+                        }
+                    } 
+                    // 2. SAY Statement (e.g., say "hi" or say name + " is great")
+                    else if (line.startsWith('say ')) {
+                        const expr = line.substring(4).trim();
+                        const result = evaluateExpression(expr, env);
+                        output.push(result);
+                    }
+                } catch (err) {
+                    outDiv.innerText = `Runtime Error on Line ${i + 1}: ${err.message}`;
+                    return;
+                }
             }
+
+            outDiv.innerText = output.length > 0 ? output.join('\n') : "Program executed with no output.";
         }
     </script>
 </body>
