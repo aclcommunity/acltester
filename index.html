@@ -39,26 +39,37 @@
         let editor;
         let pyodide;
 
-        // Root Folder File Loading Strategy
         async function initEngine() {
             try {
                 pyodide = await loadPyodide();
                 
-                // Fetch compiler.py from root & modules from highlevel/
+                // Fetch compiler.py and ALL highlevel modules
                 const compilerCode = await fetch('./compiler.py').then(r => r.text());
+                const tokensCode = await fetch('./highlevel/tokens.py').then(r => r.text());
+                const astNodesCode = await fetch('./highlevel/ast_nodes.py').then(r => r.text());
                 const lexerCode = await fetch('./highlevel/lexer.py').then(r => r.text());
                 const parserCode = await fetch('./highlevel/parser.py').then(r => r.text());
                 const semanticCode = await fetch('./highlevel/semantic.py').then(r => r.text());
                 const codegenCode = await fetch('./highlevel/codegen.py').then(r => r.text());
 
-                // Mount tree inside Pyodide WebAssembly VFS
+                // Mount complete module tree into Pyodide VFS
                 await pyodide.runPythonAsync(`
 import os
+import sys
 
+# Add highlevel folder to Python Search Path so internal imports like "from tokens import ..." work smoothly
 os.makedirs('highlevel', exist_ok=True)
+if os.path.abspath('highlevel') not in sys.path:
+    sys.path.append(os.path.abspath('highlevel'))
 
 with open('compiler.py', 'w') as f:
     f.write('''${compilerCode.replace(/\\/g, '\\\\').replace(/'''/g, "\\'\\'\\'") }''')
+
+with open('highlevel/tokens.py', 'w') as f:
+    f.write('''${tokensCode.replace(/\\/g, '\\\\').replace(/'''/g, "\\'\\'\\'") }''')
+
+with open('highlevel/ast_nodes.py', 'w') as f:
+    f.write('''${astNodesCode.replace(/\\/g, '\\\\').replace(/'''/g, "\\'\\'\\'") }''')
 
 with open('highlevel/lexer.py', 'w') as f:
     f.write('''${lexerCode.replace(/\\/g, '\\\\').replace(/'''/g, "\\'\\'\\'") }''')
@@ -92,7 +103,7 @@ def run_browser_code(code):
         return f"Syntax/Compiler Error: {str(e)}"
                 `);
 
-                document.getElementById('output').innerText = "ACL Compiler Ready to execute high-level scripts!";
+                document.getElementById('output').innerText = "ACL High-Level Engine Loaded & Ready!";
                 const btn = document.getElementById('run-btn');
                 btn.innerText = "Run Code (Ctrl + Enter)";
                 btn.disabled = false;
@@ -103,7 +114,7 @@ def run_browser_code(code):
 
         initEngine();
 
-        // Monaco Editor
+        // Monaco Editor Config
         require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.38.0/min/vs' }});
         require(['vs/editor/editor.main'], function() {
             monaco.languages.register({ id: 'acl' });
@@ -132,7 +143,7 @@ def run_browser_code(code):
         async function runACL() {
             const code = editor.getValue();
             const outDiv = document.getElementById('output');
-            outDiv.innerText = "Running ACL High-Level AST Analysis...";
+            outDiv.innerText = "Compiling with ACL High-Level Engine...";
 
             try {
                 pyodide.globals.set("user_code", code);
